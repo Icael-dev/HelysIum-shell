@@ -299,9 +299,9 @@ if (( ${#missing_pkg_deps[@]} > 0 )); then
     fi
 
     if (( ${#missing_aur_deps[@]} > 0 )); then
-        info "Installing missing AUR dependencies with '${AUR_HELPER}': ${missing_aur_deps[*]}"
+        info "Installing missing AUR dependencies with '${AUR_HELPER}' (CMAKE_BUILD_PARALLEL_LEVEL=2): ${missing_aur_deps[*]}"
         dep_rc=0
-        "$AUR_HELPER" -S --needed --asdeps "${missing_aur_deps[@]}" || dep_rc=$?
+        CMAKE_BUILD_PARALLEL_LEVEL=2 "$AUR_HELPER" -S --needed --asdeps "${missing_aur_deps[@]}" || dep_rc=$?
         if (( dep_rc != 0 )); then
             still_missing_out=""
             still_missing_rc=0
@@ -318,7 +318,7 @@ if (( ${#missing_pkg_deps[@]} > 0 )); then
             err "Failed to resolve or install AUR dependencies with '${AUR_HELPER}' (exit code ${dep_rc})."
             err "Still missing package(s): ${still_missing_list[*]}"
             err "If an AUR package failed with makepkg exit status 4 (E_USER_FUNCTION_FAILED), inspect the build error above (e.g. compiler/CMake failure or low RAM/OOM in a VM)."
-            err "To diagnose manually, run: ${AUR_HELPER} -S --needed --asdeps ${still_missing_list[*]}"
+            err "To diagnose manually, run: CMAKE_BUILD_PARALLEL_LEVEL=2 ${AUR_HELPER} -S --needed --asdeps ${still_missing_list[*]}"
             err "Once resolved, re-run ./install.sh to resume without reinstalling already-installed dependencies."
             exit "$dep_rc"
         fi

@@ -39,6 +39,7 @@ class TestShellPackagingAndVersion(unittest.TestCase):
             )
             deps = set(re.findall(r"^\tdepends = (.+)$", srcinfo, re.M))
             makedeps = set(re.findall(r"^\tmakedepends = (.+)$", srcinfo, re.M))
+            optdeps = re.findall(r"^\toptdepends = (.+)$", srcinfo, re.M)
             self.assertIn("lm_sensors", deps)
             self.assertIn("qt6-imageformats", deps)
             self.assertIn("quickshell-git", deps)
@@ -46,6 +47,8 @@ class TestShellPackagingAndVersion(unittest.TestCase):
             self.assertIn("libcava", deps)
             self.assertIn("qt6-shadertools", makedeps)
             self.assertNotIn("qt6-shadertools", deps)
+            self.assertNotIn("xcb-util-cursor", deps)
+            self.assertTrue(any(o.startswith("xcb-util-cursor:") for o in optdeps))
             self.assertIn(f"\tpkgver = {VERSION_PATH.read_text(encoding='utf-8').strip()}", srcinfo)
 
     def test_no_python_bytecode_tracked_in_git(self) -> None:

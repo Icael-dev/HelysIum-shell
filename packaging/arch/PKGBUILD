@@ -42,6 +42,7 @@ optdepends=(
     'ttf-material-symbols-variable: Material Symbols icons used by the shell UI'
     'ttf-rubik-vf: Rubik font used for clock and workspaces'
     'ttf-cascadia-code-nerd: monospace Nerd Font used by the shell UI'
+    'xcb-util-cursor: X11/XCB Qt platform plugin support'
 )
 provides=('helysium-shell')
 conflicts=('helysium-shell-git')

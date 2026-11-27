@@ -195,6 +195,7 @@ class TestShellInstallSh(unittest.TestCase):
                 bin_dir / "yay",
                 f"#!/usr/bin/env bash\n"
                 f"echo \"yay $*\" >> \"{log_file}\"\n"
+                f"echo \"yay_cmake_parallel=${{CMAKE_BUILD_PARALLEL_LEVEL:-}}\" >> \"{log_file}\"\n"
                 f": > \"{helper_ran_flag}\"\n"
                 f"{extra}"
                 f"{stderr_line}"
@@ -204,7 +205,11 @@ class TestShellInstallSh(unittest.TestCase):
         if "paru" in include_bins:
             _write_exe(
                 bin_dir / "paru",
-                f"#!/usr/bin/env bash\necho \"paru $*\" >> \"{log_file}\"\n: > \"{helper_ran_flag}\"\nexit {paru_rc}\n",
+                f"#!/usr/bin/env bash\n"
+                f"echo \"paru $*\" >> \"{log_file}\"\n"
+                f"echo \"paru_cmake_parallel=${{CMAKE_BUILD_PARALLEL_LEVEL:-}}\" >> \"{log_file}\"\n"
+                f": > \"{helper_ran_flag}\"\n"
+                f"exit {paru_rc}\n",
             )
 
         env = {
@@ -254,6 +259,7 @@ class TestShellInstallSh(unittest.TestCase):
             self.assertIn("makepkg --printsrcinfo", calls)
             self.assertIn("sudo pacman -S --needed --asdeps cmake>=3.19", calls)
             self.assertIn("yay -S --needed --asdeps libcava qt6-m3shapes-git quickshell-git", calls)
+            self.assertIn("yay_cmake_parallel=2", calls)
             self.assertNotIn("yay -Bi", calls)
             self.assertIn("makepkg -Cfsi", calls)
             self.assertFalse((pkg_dir / ".SRCINFO").exists())
@@ -269,6 +275,7 @@ class TestShellInstallSh(unittest.TestCase):
             calls = log_file.read_text(encoding="utf-8")
             self.assertIn("sudo pacman -S --needed --asdeps cmake>=3.19", calls)
             self.assertIn("paru -S --needed --asdeps libcava qt6-m3shapes-git quickshell-git", calls)
+            self.assertIn("paru_cmake_parallel=2", calls)
             self.assertIn("makepkg -Cfsi", calls)
 
     def test_all_deps_already_satisfied_skips_helper_install(self) -> None:
@@ -303,7 +310,7 @@ class TestShellInstallSh(unittest.TestCase):
             self.assertIn("Failed to resolve or install AUR dependencies with 'yay' (exit code 4)", r.stderr)
             self.assertIn("Still missing package(s): quickshell-git", r.stderr)
             self.assertIn("E_USER_FUNCTION_FAILED", r.stderr)
-            self.assertIn("yay -S --needed --asdeps quickshell-git", r.stderr)
+            self.assertIn("CMAKE_BUILD_PARALLEL_LEVEL=2 yay -S --needed --asdeps quickshell-git", r.stderr)
             self.assertIn("re-run ./install.sh to resume", r.stderr)
             self.assertNotIn("makepkg -Cfsi", log_file.read_text(encoding="utf-8"))
             self.assertNotIn("built and installed successfully", r.stdout)
