@@ -62,6 +62,22 @@ class TestShellInstallSh(unittest.TestCase):
         printsrcinfo_out: str = DEFAULT_SRCINFO,
         printsrcinfo_rc: int = 0,
         missing_deps: tuple[str, ...] = ("libcava", "qt6-m3shapes-git", "quickshell-git", "cmake>=3.19"),
+        still_missing_after_helper: tuple[str, ...] | None = None,
+        official_pkgs: tuple[str, ...] = (
+            "aubio",
+            "libqalculate",
+            "lm_sensors",
+            "pipewire",
+            "qt6-base",
+            "qt6-declarative",
+            "qt6-imageformats",
+            "qt6-multimedia",
+            "cmake",
+            "git",
+            "ninja",
+            "pkgconf",
+            "qt6-shadertools",
+        ),
         makepkg_helper_rc: int = 0,
         makepkg_pkg_rc: int = 0,
         yay_rc: int = 0,
@@ -81,6 +97,11 @@ class TestShellInstallSh(unittest.TestCase):
         srcinfo_payload.write_text(printsrcinfo_out, encoding="utf-8")
         missing_payload = tmp / "missing.payload"
         missing_payload.write_text("\n".join(missing_deps) + ("\n" if missing_deps else ""), encoding="utf-8")
+        after_missing = still_missing_after_helper if still_missing_after_helper is not None else (missing_deps if yay_rc != 0 or paru_rc != 0 else ())
+        after_payload = tmp / "after_missing.payload"
+        after_payload.write_text("\n".join(after_missing) + ("\n" if after_missing else ""), encoding="utf-8")
+        helper_ran_flag = tmp / "helper_ran.flag"
+        official_list = " ".join(official_pkgs)
 
         for tool in ("basename", "bash", "cat", "chmod", "cut", "dirname", "grep", "head", "id", "mkdir", "mktemp", "rm", "sleep", "tr", "uname"):
             real = shutil.which(tool)
@@ -96,9 +117,18 @@ class TestShellInstallSh(unittest.TestCase):
                 f"#!/usr/bin/env bash\n"
                 f"echo \"pacman $*\" >> \"{log_file}\"\n"
                 f"if [[ \"$1\" == \"-Qq\" && \"$2\" == \"base-devel\" ]]; then exit {bd_rc}; fi\n"
+                f"if [[ \"$1\" == \"-Si\" ]]; then\n"
+                f"  target=\"${{@: -1}}\"\n"
+                f"  for p in {official_list}; do\n"
+                f"    if [[ \"$p\" == \"$target\" ]]; then exit 0; fi\n"
+                f"  done\n"
+                f"  exit 1\n"
+                f"fi\n"
                 f"if [[ \"$1\" == \"-T\" ]]; then\n"
-                f"  if [[ -s \"{missing_payload}\" ]]; then\n"
-                f"    cat \"{missing_payload}\"\n"
+                f"  payload=\"{missing_payload}\"\n"
+                f"  if [[ -f \"{helper_ran_flag}\" ]]; then payload=\"{after_payload}\"; fi\n"
+                f"  if [[ -s \"$payload\" ]]; then\n"
+                f"    cat \"$payload\"\n"
                 f"    exit 127\n"
                 f"  fi\n"
                 f"  exit 0\n"
@@ -139,7 +169,7 @@ class TestShellInstallSh(unittest.TestCase):
                 f"  */yay|*/paru)\n"
                 f"    if (( {makepkg_helper_rc} == 0 )); then\n"
                 f"      h=\"$(basename \"$PWD\")\"\n"
-                f"      printf '#!/usr/bin/env bash\\necho \"%s $*\" >> \"%s\"\\nexit 0\\n' \"$h\" \"{log_file}\" > \"{bin_dir}/$h\"\n"
+                f"      printf '#!/usr/bin/env bash\\necho \"%s $*\" >> \"%s\"\\n: > \"%s\"\\nexit 0\\n' \"$h\" \"{log_file}\" \"{helper_ran_flag}\" > \"{bin_dir}/$h\"\n"
                 f"      chmod +x \"{bin_dir}/$h\"\n"
                 f"    fi\n"
                 f"    exit {makepkg_helper_rc}\n"
@@ -165,6 +195,7 @@ class TestShellInstallSh(unittest.TestCase):
                 bin_dir / "yay",
                 f"#!/usr/bin/env bash\n"
                 f"echo \"yay $*\" >> \"{log_file}\"\n"
+                f": > \"{helper_ran_flag}\"\n"
                 f"{extra}"
                 f"{stderr_line}"
                 f"exit {yay_rc}\n",
@@ -173,7 +204,7 @@ class TestShellInstallSh(unittest.TestCase):
         if "paru" in include_bins:
             _write_exe(
                 bin_dir / "paru",
-                f"#!/usr/bin/env bash\necho \"paru $*\" >> \"{log_file}\"\nexit {paru_rc}\n",
+                f"#!/usr/bin/env bash\necho \"paru $*\" >> \"{log_file}\"\n: > \"{helper_ran_flag}\"\nexit {paru_rc}\n",
             )
 
         env = {
@@ -221,7 +252,8 @@ class TestShellInstallSh(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             calls = log_file.read_text(encoding="utf-8")
             self.assertIn("makepkg --printsrcinfo", calls)
-            self.assertIn("yay -S --needed --asdeps libcava qt6-m3shapes-git quickshell-git cmake>=3.19", calls)
+            self.assertIn("sudo pacman -S --needed --asdeps cmake>=3.19", calls)
+            self.assertIn("yay -S --needed --asdeps libcava qt6-m3shapes-git quickshell-git", calls)
             self.assertNotIn("yay -Bi", calls)
             self.assertIn("makepkg -Cfsi", calls)
             self.assertFalse((pkg_dir / ".SRCINFO").exists())
@@ -235,7 +267,8 @@ class TestShellInstallSh(unittest.TestCase):
             r = self._run_install(env, script_path=script)
             self.assertEqual(r.returncode, 0, r.stderr)
             calls = log_file.read_text(encoding="utf-8")
-            self.assertIn("paru -S --needed --asdeps libcava qt6-m3shapes-git quickshell-git cmake>=3.19", calls)
+            self.assertIn("sudo pacman -S --needed --asdeps cmake>=3.19", calls)
+            self.assertIn("paru -S --needed --asdeps libcava qt6-m3shapes-git quickshell-git", calls)
             self.assertIn("makepkg -Cfsi", calls)
 
     def test_all_deps_already_satisfied_skips_helper_install(self) -> None:
@@ -251,6 +284,7 @@ class TestShellInstallSh(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             calls = log_file.read_text(encoding="utf-8")
             self.assertNotIn("yay -S", calls)
+            self.assertNotIn("sudo pacman -S", calls)
             self.assertIn("makepkg -Cfsi", calls)
 
     def test_aur_dep_failure_stops_before_makepkg_with_clear_error(self) -> None:
@@ -260,15 +294,37 @@ class TestShellInstallSh(unittest.TestCase):
             env, log_file = self._make_fake_env(
                 tmp_path,
                 include_bins=("pacman", "sudo", "git", "makepkg", "yay"),
-                yay_rc=1,
-                yay_stderr="could not satisfy dependencies: quickshell-git",
+                yay_rc=4,
+                still_missing_after_helper=("quickshell-git",),
+                yay_stderr="quickshell-git - exit status 4",
             )
             r = self._run_install(env, script_path=script)
-            self.assertEqual(r.returncode, 1)
-            self.assertIn("Failed to resolve or install dependencies", r.stderr)
-            self.assertIn("quickshell-git", r.stderr)
+            self.assertEqual(r.returncode, 4)
+            self.assertIn("Failed to resolve or install AUR dependencies with 'yay' (exit code 4)", r.stderr)
+            self.assertIn("Still missing package(s): quickshell-git", r.stderr)
+            self.assertIn("E_USER_FUNCTION_FAILED", r.stderr)
+            self.assertIn("yay -S --needed --asdeps quickshell-git", r.stderr)
+            self.assertIn("re-run ./install.sh to resume", r.stderr)
             self.assertNotIn("makepkg -Cfsi", log_file.read_text(encoding="utf-8"))
             self.assertNotIn("built and installed successfully", r.stdout)
+            self.assertEqual(list(tmp_path.glob("helysium-shell-srcinfo.*")), [])
+
+    def test_resume_after_partial_install_skips_satisfied_official_and_aur_deps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            script, _ = self._stage_isolated_repo(tmp_path)
+            env, log_file = self._make_fake_env(
+                tmp_path,
+                include_bins=("pacman", "sudo", "git", "makepkg", "yay"),
+                missing_deps=("quickshell-git",),
+            )
+            r = self._run_install(env, script_path=script)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            calls = log_file.read_text(encoding="utf-8")
+            yay_lines = [line for line in calls.splitlines() if line.startswith("yay ")]
+            self.assertNotIn("sudo pacman -S", calls)
+            self.assertEqual(yay_lines, ["yay -S --needed --asdeps quickshell-git"])
+            self.assertIn("makepkg -Cfsi", calls)
 
     def test_interactive_cleanbuild_all_choice_never_touches_local_srcinfo(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

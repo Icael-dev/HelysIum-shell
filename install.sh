@@ -276,12 +276,68 @@ fi
 # Run helper and makepkg in the foreground so stdin stays attached to the user's terminal
 # for interactive prompts (and yay cleanBuild never touches packaging/arch/).
 if (( ${#missing_pkg_deps[@]} > 0 )); then
-    info "Installing missing PKGBUILD dependencies with '${AUR_HELPER}': ${missing_pkg_deps[*]}"
-    dep_rc=0
-    "$AUR_HELPER" -S --needed --asdeps "${missing_pkg_deps[@]}" || dep_rc=$?
-    if (( dep_rc != 0 )); then
-        err "Failed to resolve or install dependencies (${missing_pkg_deps[*]}) with '${AUR_HELPER}' (exit code ${dep_rc})."
-        exit "$dep_rc"
+    missing_official_deps=()
+    missing_aur_deps=()
+    for dep in "${missing_pkg_deps[@]}"; do
+        dep_name="${dep%%[<>=]*}"
+        if pacman -Si -- "$dep_name" >/dev/null 2>&1; then
+            missing_official_deps+=("$dep")
+        else
+            missing_aur_deps+=("$dep")
+        fi
+    done
+
+    if (( ${#missing_official_deps[@]} > 0 )); then
+        info "Installing missing official Arch dependencies via pacman: ${missing_official_deps[*]}"
+        off_rc=0
+        sudo pacman -S --needed --asdeps "${missing_official_deps[@]}" || off_rc=$?
+        if (( off_rc != 0 )); then
+            err "Failed to install official Arch dependencies (${missing_official_deps[*]}) via pacman (exit code ${off_rc})."
+            err "Fix the pacman error above and re-run ./install.sh (already-installed packages will be skipped)."
+            exit "$off_rc"
+        fi
+    fi
+
+    if (( ${#missing_aur_deps[@]} > 0 )); then
+        info "Installing missing AUR dependencies with '${AUR_HELPER}': ${missing_aur_deps[*]}"
+        dep_rc=0
+        "$AUR_HELPER" -S --needed --asdeps "${missing_aur_deps[@]}" || dep_rc=$?
+        if (( dep_rc != 0 )); then
+            still_missing_out=""
+            still_missing_rc=0
+            still_missing_out="$(pacman -T "${missing_aur_deps[@]}" 2>/dev/null)" || still_missing_rc=$?
+            still_missing_list=()
+            if (( still_missing_rc == 127 )); then
+                while IFS= read -r dep; do
+                    [[ -n "$dep" ]] && still_missing_list+=("$dep")
+                done <<< "$still_missing_out"
+            else
+                still_missing_list=("${missing_aur_deps[@]}")
+            fi
+
+            err "Failed to resolve or install AUR dependencies with '${AUR_HELPER}' (exit code ${dep_rc})."
+            err "Still missing package(s): ${still_missing_list[*]}"
+            err "If an AUR package failed with makepkg exit status 4 (E_USER_FUNCTION_FAILED), inspect the build error above (e.g. compiler/CMake failure or low RAM/OOM in a VM)."
+            err "To diagnose manually, run: ${AUR_HELPER} -S --needed --asdeps ${still_missing_list[*]}"
+            err "Once resolved, re-run ./install.sh to resume without reinstalling already-installed dependencies."
+            exit "$dep_rc"
+        fi
+    fi
+
+    # Final verification before building the local package (never run makepkg with unsatisfied AUR deps).
+    verify_rc=0
+    verify_out="$(pacman -T "${all_pkg_deps[@]}" 2>/dev/null)" || verify_rc=$?
+    if (( verify_rc == 127 )); then
+        remaining_deps=()
+        while IFS= read -r dep; do
+            [[ -n "$dep" ]] && remaining_deps+=("$dep")
+        done <<< "$verify_out"
+        err "Required PKGBUILD dependencies are still unsatisfied after installation: ${remaining_deps[*]}"
+        err "Resolve them manually and re-run ./install.sh."
+        exit 1
+    elif (( verify_rc != 0 )); then
+        err "Failed to verify installed dependencies with 'pacman -T' (exit code ${verify_rc})."
+        exit 1
     fi
 fi
 
