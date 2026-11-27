@@ -25,14 +25,43 @@ https://github.com/user-attachments/assets/0840f496-575c-4ca6-83a8-87bb01a85c5f
 ### Arch Linux
 
 > [!WARNING]
-> If you want to make your own changes/tweaks to the shell, do NOT edit the files installed by the AUR
+> If you want to make your own changes/tweaks to the shell, do NOT edit the files installed by the Arch
 > package. Instead, follow the instructions in the [manual installation section](#manual-installation).
 
-The shell is available from the AUR as `helysium-shell`. You can install it with an AUR helper (recommended),
-like [`paru`](https://github.com/morganamilo/paru), or by manually downloading the PKGBUILD and running `makepkg -si`.
+#### From GitHub (recommended automated script)
 
-A package following the latest commit also exists as `helysium-shell-git`. This is bleeding-edge
-and likely to be unstable/have bugs. Regular users are recommended to use the stable package (`helysium-shell`).
+Clone the repository and run `./install.sh` (never as `root`):
+
+```sh
+git clone https://github.com/Icael-dev/HelysIum-shell.git
+cd HelysIum-shell
+./install.sh
+```
+
+What `./install.sh` does:
+1. Checks Arch Linux compatibility, non-root execution, and official prerequisites (`git`, `base-devel`, `pacman`, `sudo`).
+2. Detects `yay` or `paru` (asks which one if both are present, or offers to install one from the official AUR with explicit confirmation if neither is present).
+3. Reads `packaging/arch/PKGBUILD` metadata into a temporary `.SRCINFO` via `makepkg --printsrcinfo`, installs missing official and AUR dependencies (`libcava`, `qt6-m3shapes-git`, `quickshell-git`, `lm_sensors`, Qt6, CMake/Ninja) via `yay` or `paru -S --needed --asdeps`, and builds/installs `helysium-shell` locally with `makepkg -Cfsi`.
+
+> [!NOTE]
+> Running `makepkg -si` alone from `packaging/arch/` **cannot** resolve AUR dependencies (`libcava`, `qt6-m3shapes-git`, `quickshell-git`).
+> If you prefer not to use `./install.sh`, install the AUR dependencies first with `yay` or `paru`, then run `makepkg -Cfsi`:
+>
+> ```sh
+> yay -S --needed --asdeps libcava qt6-m3shapes-git quickshell-git
+> # or: paru -S --needed --asdeps libcava qt6-m3shapes-git quickshell-git
+> cd HelysIum-shell/packaging/arch
+> makepkg -Cfsi
+> ```
+
+#### From AUR (once published)
+
+Once published on the AUR as `helysium-shell`, you can install it with an AUR helper like `yay` or `paru`:
+
+```sh
+yay -S helysium-shell
+# or: paru -S helysium-shell
+```
 
 ### Nix
 
