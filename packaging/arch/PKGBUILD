@@ -1,0 +1,92 @@
+# Maintainer: HelysIum (Icael-dev)
+# Local source Arch Linux PKGBUILD for HelysIum-shell (bootstrap step 2).
+# Builds directly from the local HelysIum-shell repository checkout without
+# requiring HelysIum-lib, helysium-cli, or a published AUR package.
+
+pkgname=helysium-shell
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Quickshell-based desktop shell for HelysIum'
+arch=('x86_64' 'aarch64')
+url='https://github.com/Icael-dev/HelysIum-shell'
+license=('GPL-3.0-only')
+depends=(
+    'aubio'
+    'libcava'
+    'libqalculate'
+    'lm_sensors'
+    'pipewire'
+    'qt6-base'
+    'qt6-declarative'
+    'qt6-imageformats'
+    'qt6-m3shapes-git'
+    'qt6-multimedia'
+    'quickshell-git'
+)
+makedepends=(
+    'cmake>=3.19'
+    'git'
+    'ninja'
+    'pkgconf'
+    'qt6-shadertools'
+)
+optdepends=(
+    'helysium-cli: CLI integration for scheme, wallpaper, and shell control'
+    'hyprland: recommended Wayland compositor (>= 0.57 for native Lua config)'
+    'brightnessctl: laptop backlight brightness control'
+    'ddcutil: external monitor DDC/CI brightness control'
+    'networkmanager: Wi-Fi and VPN control via nmcli'
+    'power-profiles-daemon: power profile switching'
+    'swappy: screenshot annotation from area picker'
+    'wl-clipboard: copy screenshots to clipboard from area picker'
+    'ttf-material-symbols-variable: Material Symbols icons used by the shell UI'
+    'ttf-rubik-vf: Rubik font used for clock and workspaces'
+    'ttf-cascadia-code-nerd: monospace Nerd Font used by the shell UI'
+)
+provides=('helysium-shell')
+conflicts=('helysium-shell-git')
+
+_resolve_src() {
+    local src="${HELYSIUM_SHELL_SRC:-${startdir}/../..}"
+    if [[ ! -f "${src}/CMakeLists.txt" || ! -f "${src}/shell.qml" ]]; then
+        error "HelysIum-shell source directory not found at: ${src} (set HELYSIUM_SHELL_SRC to override)"
+        return 1
+    fi
+    realpath "${src}"
+}
+
+build() {
+    local _src _file_ver
+    _src="$(_resolve_src)"
+
+    if [[ -f "${_src}/VERSION" ]]; then
+        _file_ver="$(tr -d '[:space:]' < "${_src}/VERSION")"
+        if [[ "${_file_ver}" != "${pkgver}" ]]; then
+            error "Version mismatch: PKGBUILD pkgver=${pkgver} != VERSION (${_file_ver})"
+            return 1
+        fi
+    fi
+
+    cmake -S "${_src}" -B "${srcdir}/build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DINSTALL_LIBDIR=lib/helysium \
+        -DINSTALL_QMLDIR=lib/qt6/qml \
+        -DINSTALL_QSCONFDIR=/etc/xdg/quickshell/helysium \
+        -DDISTRIBUTOR="HelysIum"
+
+    cmake --build "${srcdir}/build"
+}
+
+package() {
+    local _src
+    _src="$(_resolve_src)"
+
+    DESTDIR="${pkgdir}" cmake --install "${srcdir}/build"
+
+    install -Dm644 "${_src}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    if [[ -f "${_src}/NOTICE" ]]; then
+        install -Dm644 "${_src}/NOTICE" "${pkgdir}/usr/share/licenses/${pkgname}/NOTICE"
+    fi
+}

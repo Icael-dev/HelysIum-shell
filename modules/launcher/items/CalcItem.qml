@@ -1,0 +1,147 @@
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import HelysIum
+import HelysIum.Config
+import HelysIum.I18n
+import qs.components
+import qs.services
+
+Item {
+    id: root
+
+    required property var list
+    readonly property string math: list.search.text.slice(`${GlobalConfig.launcher.actionPrefix}calc `.length)
+
+    function isValidExpression(expr: string): bool {
+        return typeof expr === "string" && !/[\x00-\x1f\x7f]/.test(expr);
+    }
+
+    function buildCalcCommand(terminal: var, expr: string): list<string> {
+        if (!terminal || terminal.length === 0 || !root.isValidExpression(expr))
+            return [];
+        for (let i = 0; i < terminal.length; ++i) {
+            const arg = terminal[i];
+            if (typeof arg !== "string" || arg.length === 0 || /[\x00-\x1f\x7f]/.test(arg))
+                return [];
+        }
+        return expr.length > 0 ? [...terminal, "qalc", "-i", "--", expr] : [...terminal, "qalc", "-i"];
+    }
+
+    function onClicked(): void {
+        if (Qalculator.rawResult.length > 0 && root.isValidExpression(Qalculator.rawResult))
+            Quickshell.execDetached(["wl-copy", "--", Qalculator.rawResult]);
+        root.list.screenState.launcher = false;
+    }
+
+    function openInCalculator(): void {
+        const cmd = root.buildCalcCommand(GlobalConfig.general.apps.terminal, root.math);
+        if (cmd.length > 0)
+            Quickshell.execDetached(cmd);
+        root.list.screenState.launcher = false;
+    }
+
+    onMathChanged: {
+        if (math.length > 0 && root.isValidExpression(math))
+            Qalculator.evalAsync(math);
+    }
+
+    implicitHeight: Tokens.sizes.launcher.itemHeight
+
+    anchors.left: parent?.left
+    anchors.right: parent?.right
+
+    StateLayer {
+        radius: Tokens.rounding.large
+        onClicked: root.onClicked()
+    }
+
+    RowLayout {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.margins: Tokens.padding.medium
+
+        spacing: Tokens.spacing.medium
+
+        MaterialIcon {
+            text: "function"
+            fontStyle: Tokens.font.icon.extraLarge
+            Layout.alignment: Qt.AlignVCenter
+        }
+
+        StyledText {
+            id: result
+
+            color: {
+                if (text.includes("error: ") || text.includes("warning: "))
+                    return Colours.palette.m3error;
+                if (!root.math)
+                    return Colours.palette.m3onSurfaceVariant;
+                return Colours.palette.m3onSurface;
+            }
+
+            text: root.math.length > 0 ? (Qalculator.result ? Tr.trMarked(Qalculator.result) : Tr.tr("Calculating...")) : Tr.tr("Type an expression to calculate")
+            elide: Text.ElideLeft
+
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+        }
+
+        StyledRect {
+            color: Colours.palette.m3tertiary
+            radius: Tokens.rounding.large
+            clip: true
+
+            implicitWidth: (stateLayer.containsMouse ? label.implicitWidth + label.anchors.rightMargin : 0) + icon.implicitWidth + Tokens.padding.medium * 2
+            implicitHeight: Math.max(label.implicitHeight, icon.implicitHeight) + Tokens.padding.small
+
+            Layout.alignment: Qt.AlignVCenter
+
+            StateLayer {
+                id: stateLayer
+
+                color: Colours.palette.m3onTertiary
+                onClicked: root.openInCalculator()
+            }
+
+            StyledText {
+                id: label
+
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: icon.left
+                anchors.rightMargin: Tokens.spacing.small
+
+                text: Tr.tr("Open in calculator")
+                color: Colours.palette.m3onTertiary
+                font: Tokens.font.label.medium
+
+                opacity: stateLayer.containsMouse ? 1 : 0
+
+                Behavior on opacity {
+                    Anim {
+                        type: Anim.DefaultEffects
+                    }
+                }
+            }
+
+            MaterialIcon {
+                id: icon
+
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: Tokens.padding.medium
+
+                text: "open_in_new"
+                color: Colours.palette.m3onTertiary
+                fontStyle: Tokens.font.icon.large
+            }
+
+            Behavior on implicitWidth {
+                Anim {
+                    type: Anim.Emphasized
+                }
+            }
+        }
+    }
+}

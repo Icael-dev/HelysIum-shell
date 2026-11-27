@@ -1,0 +1,37 @@
+HelysIum-shell
+==============
+
+License
+-------
+This repository is distributed under the GNU General Public License v3.0,
+as provided in the root LICENSE file.
+
+Modification Notice (GPL-3.0 §5(a))
+-----------------------------------
+This repository is a modified version of caelestia-dots/shell
+(https://github.com/caelestia-dots/shell), based on verified upstream commit
+e72df8eb687246aa6c6ec6daa631073b374e5215.
+
+Modifications by the HelysIum project (Icael-dev) were carried out in
+November 2026. HelysIum does not claim exclusive copyright over inherited
+upstream or third-party components; all original copyright notices,
+attributions, and license terms must be preserved.
+
+Identified Third-Party Components
+---------------------------------
+The following third-party components and notices are present in this
+repository and remain subject to their respective licenses (this list is
+not guaranteed to be exhaustive):
+
+- Google Sans Flex — SIL Open Font License 1.1
+  (assets/google-sans-flex/LICENSE)
+- rgbcx — MIT / Public Domain, Richard Geldreich, Jr., 2020; also references
+  bc7e.ispc under Apache-2.0, Binomial LLC
+  (plugin/3rdparty/rgbcx/LICENSE, plugin/3rdparty/rgbcx/rgbcx.h)
+- fzf.js — BSD-3-Clause, Copyright (c) 2021 Ajit
+  (utils/scripts/fzf.js)
+- fuzzysort.js — MIT, Copyright (c) 2018 Stephen Kamenar
+  (utils/scripts/fuzzysort.js)
+
+All copyright notices and license texts of third-party components must be
+retained intact upon redistribution.

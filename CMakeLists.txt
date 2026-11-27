@@ -1,0 +1,90 @@
+cmake_minimum_required(VERSION 3.19)
+
+if(NOT DEFINED VERSION OR "${VERSION}" STREQUAL "")
+    execute_process(COMMAND git describe --tags --abbrev=0 --match "v[0-9]*"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif()
+
+if(NOT DEFINED GIT_REVISION OR "${GIT_REVISION}" STREQUAL "")
+    execute_process(COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE GIT_REVISION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+
+    if("${GIT_REVISION}" STREQUAL "")
+        set(GIT_REVISION "unknown")
+    endif()
+endif()
+
+string(REGEX REPLACE "^v" "" VERSION "${VERSION}")
+if(NOT "${VERSION}" MATCHES "^[0-9]+(\\.[0-9]+)*$")
+    if(EXISTS "${CMAKE_SOURCE_DIR}/VERSION")
+        file(READ "${CMAKE_SOURCE_DIR}/VERSION" VERSION)
+        string(STRIP "${VERSION}" VERSION)
+    endif()
+    if(NOT "${VERSION}" MATCHES "^[0-9]+(\\.[0-9]+)*$")
+        set(VERSION "0.1.0")
+    endif()
+endif()
+
+project(helysium-shell VERSION ${VERSION} LANGUAGES CXX)
+
+include(GNUInstallDirs)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
+set(DISTRIBUTOR "Unset" CACHE STRING "Distributor")
+set(ENABLE_MODULES "extras;plugin;shell" CACHE STRING "Modules to build/install")
+set(INSTALL_LIBDIR "${CMAKE_INSTALL_LIBDIR}/helysium" CACHE STRING "Library install dir")
+set(INSTALL_QMLDIR "${CMAKE_INSTALL_LIBDIR}/qt6/qml" CACHE STRING "QML install dir")
+set(INSTALL_QSCONFDIR "${CMAKE_INSTALL_SYSCONFDIR}/xdg/quickshell/helysium" CACHE STRING "Quickshell config install dir")
+
+add_compile_definitions(
+    QT_NO_CAST_FROM_ASCII
+    QT_NO_CAST_TO_ASCII
+    QT_NO_CAST_FROM_BYTEARRAY
+)
+
+add_compile_options(
+    -Wall -Wextra -Wpedantic -Wshadow -Wconversion
+    -Wold-style-cast -Wnull-dereference -Wdouble-promotion
+    -Wformat=2 -Wfloat-equal -Woverloaded-virtual
+    -Wsign-conversion -Wredundant-decls -Wswitch
+    -Wunreachable-code
+)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-Wunused-lambda-capture -Wno-nonportable-include-path)
+endif()
+
+if("extras" IN_LIST ENABLE_MODULES)
+    add_subdirectory(extras)
+endif()
+
+if("plugin" IN_LIST ENABLE_MODULES)
+    add_subdirectory(plugin)
+endif()
+
+if("shell" IN_LIST ENABLE_MODULES)
+    foreach(dir assets components daemons modules services utils)
+        install(DIRECTORY ${dir} DESTINATION "${INSTALL_QSCONFDIR}")
+    endforeach()
+
+    install(PROGRAMS assets/wrap_term_launch.sh DESTINATION "${INSTALL_QSCONFDIR}/assets")
+
+    file(READ shell.qml SHELL_QML)
+    string(REPLACE "settings.watchFiles: true" "settings.watchFiles: false" SHELL_QML "${SHELL_QML}")
+    file(WRITE "${CMAKE_BINARY_DIR}/qml/shell.qml" "${SHELL_QML}")
+    install(FILES "${CMAKE_BINARY_DIR}/qml/shell.qml" DESTINATION "${INSTALL_QSCONFDIR}")
+
+    install(FILES LICENSE DESTINATION "${INSTALL_QSCONFDIR}")
+endif()
